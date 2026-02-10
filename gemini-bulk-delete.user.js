@@ -13,124 +13,33 @@
 (function () {
     'use strict';
 
-    // =========================================================================
-    // Mini Framework
-    // =========================================================================
-
-    const MiniFramework = (() => {
-        // --- 1. Trusted Types & Template Literals ---
-
-        const policy = window.trustedTypes && window.trustedTypes.createPolicy ?
-            window.trustedTypes.createPolicy('geminiBulkDeletePolicy', { createHTML: s => s }) :
-            { createHTML: s => s };
-
-        function html(strings, ...values) {
-            const raw = strings.reduce((acc, str, i) => acc + str + (values[i] || ''), '');
-            return policy.createHTML(raw);
-        }
-
-        function css(strings, ...values) {
-            const raw = strings.reduce((acc, str, i) => acc + str + (values[i] || ''), '');
-            const style = document.createElement('style');
-            style.textContent = raw;
-            document.head.appendChild(style);
-        }
-
-        // --- 2. State Management ---
-
-        function createStore(initialState) {
-            const listeners = new Set();
-
-            const proxy = new Proxy(initialState, {
-                set(target, prop, value) {
-                    if (target[prop] !== value) {
-                        target[prop] = value;
-                        listeners.forEach(fn => fn(prop, value));
-                    }
-                    return true;
-                }
-            });
-
-            return {
-                state: proxy,
-                subscribe(fn) {
-                    listeners.add(fn);
-                    return () => listeners.delete(fn);
-                }
-            };
-        }
-
-        // --- 3. Component System ---
-
-        class Component {
-            constructor(props = {}) {
-                this.props = props;
-                this.el = null;
-                this._unsubscribe = null;
-            }
-
-            // To be implemented by subclass
-            render() {
-                return '';
-            }
-
-            // Lifecycle hooks
-            onMount() { }
-            onUnmount() { }
-            onUpdate() { }
-
-            mount(container) {
-                const wrapper = document.createElement('div');
-                wrapper.innerHTML = this.render();
-                this.el = wrapper.firstElementChild;
-
-                if (this.el) {
-                    container.appendChild(this.el);
-                    this.onMount();
-                } else {
-                    console.warn('Component render returned no element');
-                }
-            }
-
-            unmount() {
-                if (this.el && this.el.parentNode) {
-                    this.el.parentNode.removeChild(this.el);
-                }
-                if (this._unsubscribe) {
-                    this._unsubscribe();
-                }
-                this.onUnmount();
-            }
-
-            update() {
-                if (!this.el) return;
-
-                // Simple re-render strategy: update content or attributes
-                // For this simple framework, we expect subclasses to implement specific DOM variable updates in `onUpdate`
-                // or we could do a full replace (which kills event listeners, so we avoid that for now).
-                this.onUpdate();
-            }
-        }
-
-        return {
-            html,
-            css,
-            createStore,
-            Component
-        };
-    })();
-
 
     // =========================================================================
-    // App Implementation - Gemini Bulk Delete
+    // Utilities
     // =========================================================================
 
-    const { html, css, createStore, Component } = MiniFramework;
+    const policy = window.trustedTypes && window.trustedTypes.createPolicy ?
+        window.trustedTypes.createPolicy('geminiBulkDeletePolicy', { createHTML: s => s }) :
+        { createHTML: s => s };
 
-    // --- Constants & Styles ---
+    function html(strings, ...values) {
+        const raw = strings.reduce((acc, str, i) => acc + str + (values[i] || ''), '');
+        return policy.createHTML(raw);
+    }
+
+    function css(strings, ...values) {
+        const raw = strings.reduce((acc, str, i) => acc + str + (values[i] || ''), '');
+        const style = document.createElement('style');
+        style.textContent = raw;
+        document.head.appendChild(style);
+    }
+
+    // =========================================================================
+    // Styles
+    // =========================================================================
+
     const CHECKBOX_CLASS = 'gemini-bulk-del-checkbox';
 
-    // Global Styles
     css`
         :root {
             --gemini-bulk-bg: rgba(30, 30, 30, 0.9);
@@ -178,7 +87,7 @@
         .gemini-bulk-selected {
             background-color: var(--gemini-bulk-border);
         }
-        /* Floating Bar Component */
+        /* Floating Bar */
         .gemini-floating-bar {
             position: fixed;
             bottom: 30px;
@@ -230,71 +139,49 @@
         }
     `;
 
-    // --- Floating Bar Component ---
-
-    class FloatingBar extends Component {
-        constructor(props) {
-            super(props);
-            // props.store is required
-        }
-
-        render() {
-            const count = this.props.store.state.selectedCount;
-            const visibleClass = count > 0 ? 'visible' : '';
-
-            return html`
-                <div id="gemini-bulk-del-bar" class="gemini-floating-bar ${visibleClass}">
-                    <span>${count} selected</span>
-                    <button id="gemini-bulk-del-btn">Delete</button>
-                </div>
-            `;
-        }
-
-        onMount() {
-            // Subscribe to store changes to trigger updates
-            this.props.store.subscribe(() => this.update());
-
-            // Bind delete button
-            const btn = this.el.querySelector('#gemini-bulk-del-btn');
-            if (btn && this.props.onDelete) {
-                btn.addEventListener('click', this.props.onDelete);
-            }
-        }
-
-        onUpdate() {
-            const count = this.props.store.state.selectedCount;
-            const countSpan = this.el.querySelector('span');
-
-            // Update text
-            if (countSpan) {
-                countSpan.textContent = `${count} selected`;
-            }
-
-            // Update visibility
-            if (count > 0) {
-                this.el.classList.add('visible');
-            } else {
-                this.el.classList.remove('visible');
-            }
-        }
-    }
-
-    // --- Business Logic Controller ---
+    // =========================================================================
+    // Core Logic
+    // =========================================================================
 
     class GeminiBulkDelete {
         constructor() {
-            this.store = createStore({ selectedCount: 0 });
-            this.floatingBar = new FloatingBar({
-                store: this.store,
-                onDelete: () => this.deleteSelectedItems()
-            });
+            this.selectedCount = 0;
+            this.floatingBarEl = null;
+            this.countEl = null;
+            this.deleteBtn = null;
         }
 
         init() {
             console.log('[Bulk Delete] Initializing...');
-            this.floatingBar.mount(document.body);
+            this.createFloatingBar();
             this.initObserver();
             this.injectCheckboxes();
+        }
+
+        createFloatingBar() {
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = html`
+                <div id="gemini-bulk-del-bar" class="gemini-floating-bar">
+                    <span>0 selected</span>
+                    <button id="gemini-bulk-del-btn">Delete</button>
+                </div>
+            `;
+            this.floatingBarEl = wrapper.firstElementChild;
+            document.body.appendChild(this.floatingBarEl);
+
+            this.countEl = this.floatingBarEl.querySelector('span');
+            this.deleteBtn = this.floatingBarEl.querySelector('button');
+
+            this.deleteBtn.addEventListener('click', () => this.deleteSelectedItems());
+        }
+
+        updateFloatingBar() {
+            if (this.selectedCount > 0) {
+                this.floatingBarEl.classList.add('visible');
+                this.countEl.textContent = `${this.selectedCount} selected`;
+            } else {
+                this.floatingBarEl.classList.remove('visible');
+            }
         }
 
         initObserver() {
@@ -342,16 +229,19 @@
         }
 
         syncState() {
-            this.store.state.selectedCount = document.querySelectorAll(`.${CHECKBOX_CLASS}:checked`).length;
+            this.selectedCount = document.querySelectorAll(`.${CHECKBOX_CLASS}:checked`).length;
+            this.updateFloatingBar();
         }
 
         async deleteSelectedItems() {
-            console.log('[Bulk Delete] Starting deletion...');
+            if (this.selectedCount === 0) return;
 
+            console.log('[Bulk Delete] Starting deletion...');
             const checkboxes = document.querySelectorAll(`.${CHECKBOX_CLASS}:checked`);
-            if (!checkboxes.length) {
-                return;
-            }
+
+            // Optional: Visually indicate processing could be added here
+            this.deleteBtn.textContent = 'Deleting...';
+            this.deleteBtn.disabled = true;
 
             for (const checkbox of checkboxes) {
                 const menuButton = checkbox
@@ -364,30 +254,30 @@
             }
 
             this.syncState();
+            this.deleteBtn.textContent = 'Delete';
+            this.deleteBtn.disabled = false;
             console.log('[Bulk Delete] Finished');
         }
 
         async deleteItem(menuButton) {
-            menuButton.click();
+            try {
+                menuButton.click();
+                await new Promise(resolve => setTimeout(resolve, 100));
 
-            await new Promise(resolve => setTimeout(resolve, 100));
+                const deleteOption = document.querySelector('[role="menuitem"][data-test-id="delete-button"]');
+                if (!deleteOption) return;
 
-            const deleteOption = document.querySelector('[role="menuitem"][data-test-id="delete-button"]');
-            if (!deleteOption) {
-                return;
+                deleteOption.click();
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                const confirmButton = document.querySelector('button[data-test-id="confirm-button"]');
+                if (!confirmButton) return;
+
+                confirmButton.click();
+                await new Promise(resolve => setTimeout(resolve, 200)); // slightly longer wait for deletion to process
+            } catch (err) {
+                console.error('Delete failed for item', err);
             }
-
-            deleteOption.click();
-
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-            const confirmButton = document.querySelector('button[data-test-id="confirm-button"]');
-            if (!confirmButton) {
-                return;
-            }
-
-            confirmButton.click();
-            await new Promise(resolve => setTimeout(resolve, 100));
         }
     }
 
