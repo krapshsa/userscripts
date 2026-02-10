@@ -86,10 +86,10 @@
         }
         /* Floating Bar */
         .gemini-floating-bar {
-            position: fixed;
-            bottom: 30px;
+            position: absolute !important;
+            bottom: 20px; /* Start slightly lower (safe zone) */
             left: 50%;
-            transform: translateX(-50%) translateY(100px);
+            transform: translateX(-50%); /* Center horizontally only - No vertical transform! */
             background: var(--gemini-bulk-bg);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
@@ -105,12 +105,14 @@
             font-family: 'Google Sans', Roboto, sans-serif;
             font-size: 14px;
             font-weight: 500;
-            transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s ease;
+            transition: bottom 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s ease; /* Animate BOTTOM property */
             opacity: 0;
             pointer-events: none;
+            width: max-content;
+            margin: 0 !important;
         }
         .gemini-floating-bar.visible {
-            transform: translateX(-50%) translateY(0);
+            bottom: 30px; /* Slide UP to final position */
             opacity: 1;
             pointer-events: auto;
         }
@@ -163,12 +165,24 @@
                 </div>
             `;
             this.floatingBarEl = wrapper.firstElementChild;
-            document.body.appendChild(this.floatingBarEl);
-
             this.countEl = this.floatingBarEl.querySelector('span');
             this.deleteBtn = this.floatingBarEl.querySelector('button');
 
             this.deleteBtn.addEventListener('click', () => this.deleteSelectedItems());
+
+            const appendToSidebar = async () => {
+                try {
+                    const sidebar = await this.waitForSelector('bard-sidenav', 10000);
+                    sidebar.appendChild(this.floatingBarEl);
+                    console.log('[Bulk Delete] Floating bar attached to sidebar');
+                } catch (e) {
+                    console.warn('[Bulk Delete] Sidebar not found, attaching to body as fallback');
+                    document.body.appendChild(this.floatingBarEl);
+                    this.floatingBarEl.style.position = 'fixed';
+                    this.floatingBarEl.style.bottom = '30px';
+                }
+            };
+            appendToSidebar();
         }
 
         updateFloatingBar() {
