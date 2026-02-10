@@ -13,11 +13,9 @@
 (function () {
     'use strict';
 
-
     // =========================================================================
     // Utilities
     // =========================================================================
-
     const policy = window.trustedTypes && window.trustedTypes.createPolicy ?
         window.trustedTypes.createPolicy('geminiBulkDeletePolicy', { createHTML: s => s }) :
         { createHTML: s => s };
@@ -37,7 +35,6 @@
     // =========================================================================
     // Styles
     // =========================================================================
-
     const CHECKBOX_CLASS = 'gemini-bulk-del-checkbox';
 
     css`
@@ -142,7 +139,6 @@
     // =========================================================================
     // Core Logic
     // =========================================================================
-
     class GeminiBulkDelete {
         constructor() {
             this.selectedCount = 0;
@@ -259,22 +255,54 @@
             console.log('[Bulk Delete] Finished');
         }
 
+        async waitForSelector(selector, timeout = 5000) {
+            if (document.querySelector(selector)) return document.querySelector(selector);
+            return new Promise((resolve, reject) => {
+                const observer = new MutationObserver(() => {
+                    const el = document.querySelector(selector);
+                    if (el) {
+                        observer.disconnect();
+                        resolve(el);
+                    }
+                });
+                observer.observe(document.body, { childList: true, subtree: true });
+                setTimeout(() => {
+                    observer.disconnect();
+                    reject(new Error(`Timeout waiting for selector: ${selector}`));
+                }, timeout);
+            });
+        }
+
+        async waitForDisappearance(selector, timeout = 5000) {
+            if (!document.querySelector(selector)) return;
+            return new Promise((resolve, reject) => {
+                const observer = new MutationObserver(() => {
+                    if (!document.querySelector(selector)) {
+                        observer.disconnect();
+                        resolve();
+                    }
+                });
+                observer.observe(document.body, { childList: true, subtree: true });
+                setTimeout(() => {
+                    observer.disconnect();
+                    reject(new Error(`Timeout waiting for disappearance: ${selector}`));
+                }, timeout);
+            });
+        }
+
         async deleteItem(menuButton) {
             try {
                 menuButton.click();
-                await new Promise(resolve => setTimeout(resolve, 100));
 
-                const deleteOption = document.querySelector('[role="menuitem"][data-test-id="delete-button"]');
-                if (!deleteOption) return;
-
+                const deleteSelector = '[role="menuitem"][data-test-id="delete-button"]';
+                const deleteOption = await this.waitForSelector(deleteSelector);
                 deleteOption.click();
-                await new Promise(resolve => setTimeout(resolve, 100));
 
-                const confirmButton = document.querySelector('button[data-test-id="confirm-button"]');
-                if (!confirmButton) return;
-
+                const confirmSelector = 'button[data-test-id="confirm-button"]';
+                const confirmButton = await this.waitForSelector(confirmSelector);
                 confirmButton.click();
-                await new Promise(resolve => setTimeout(resolve, 200)); // slightly longer wait for deletion to process
+
+                await this.waitForDisappearance(confirmSelector);
             } catch (err) {
                 console.error('Delete failed for item', err);
             }
