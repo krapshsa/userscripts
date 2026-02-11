@@ -334,34 +334,62 @@
             console.log('[Bulk Delete] Finished');
         }
 
+        isVisible(el) {
+            if (!el) return false;
+            if (el.checkVisibility) {
+                return el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+            }
+            const style = window.getComputedStyle(el);
+            return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length) &&
+                style.display !== 'none' &&
+                style.visibility !== 'hidden';
+        }
+
         async waitForSelector(selector, timeout = 5000) {
-            if (document.querySelector(selector)) return document.querySelector(selector);
+            const check = () => {
+                const el = document.querySelector(selector);
+                return (el && this.isVisible(el)) ? el : null;
+            };
+
+            const existing = check();
+            if (existing) return existing;
+
             return new Promise((resolve, reject) => {
                 const observer = new MutationObserver(() => {
-                    const el = document.querySelector(selector);
+                    const el = check();
                     if (el) {
                         observer.disconnect();
                         resolve(el);
                     }
                 });
-                observer.observe(document.body, { childList: true, subtree: true });
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true,
+                    attributes: true // Watch for class/style changes
+                });
                 setTimeout(() => {
                     observer.disconnect();
-                    reject(new Error(`Timeout waiting for selector: ${selector}`));
+                    reject(new Error(`Timeout waiting for visible selector: ${selector}`));
                 }, timeout);
             });
         }
 
         async waitForDisappearance(selector, timeout = 5000) {
-            if (!document.querySelector(selector)) return;
+            const check = () => !this.isVisible(document.querySelector(selector));
+            if (check()) return;
+
             return new Promise((resolve, reject) => {
                 const observer = new MutationObserver(() => {
-                    if (!document.querySelector(selector)) {
+                    if (check()) {
                         observer.disconnect();
                         resolve();
                     }
                 });
-                observer.observe(document.body, { childList: true, subtree: true });
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true,
+                    attributes: true
+                });
                 setTimeout(() => {
                     observer.disconnect();
                     reject(new Error(`Timeout waiting for disappearance: ${selector}`));
@@ -371,6 +399,9 @@
 
         async deleteItem(menuButton) {
             try {
+                if (!this.isVisible(menuButton)) {
+                    menuButton.scrollIntoView({ block: 'center' });
+                }
                 menuButton.click();
 
                 const deleteSelector = '[role="menuitem"][data-test-id="delete-button"]';
@@ -382,6 +413,9 @@
                 confirmButton.click();
 
                 await this.waitForDisappearance(confirmSelector);
+
+                // Small grace period for DOM stabilization
+                await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
             } catch (err) {
                 console.error('Delete failed for item', err);
             }
