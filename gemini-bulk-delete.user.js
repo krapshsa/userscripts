@@ -143,10 +143,25 @@
     // =========================================================================
     class GeminiBulkDelete {
         constructor() {
-            this.selectedCount = 0;
+            this.state = this.createStore({
+                selectedCount: 0
+            }, (state) => {
+                this.updateFloatingBar(state);
+            });
+
             this.floatingBarEl = null;
             this.countEl = null;
             this.deleteBtn = null;
+        }
+
+        createStore(initialState, onChange) {
+            return new Proxy(initialState, {
+                set: (target, property, value) => {
+                    target[property] = value;
+                    onChange(target);
+                    return true;
+                }
+            });
         }
 
         init() {
@@ -185,10 +200,10 @@
             appendToSidebar();
         }
 
-        updateFloatingBar() {
-            if (this.selectedCount > 0) {
+        updateFloatingBar(state) {
+            if (state.selectedCount > 0) {
                 this.floatingBarEl.classList.add('visible');
-                this.countEl.textContent = `${this.selectedCount} selected`;
+                this.countEl.textContent = `${state.selectedCount} selected`;
             } else {
                 this.floatingBarEl.classList.remove('visible');
             }
@@ -232,19 +247,15 @@
             const link = e.target.closest('a');
             if (e.target.checked) {
                 link.classList.add('gemini-bulk-selected');
+                this.state.selectedCount++;
             } else {
                 link.classList.remove('gemini-bulk-selected');
+                this.state.selectedCount--;
             }
-            this.syncState();
-        }
-
-        syncState() {
-            this.selectedCount = document.querySelectorAll(`.${CHECKBOX_CLASS}:checked`).length;
-            this.updateFloatingBar();
         }
 
         async deleteSelectedItems() {
-            if (this.selectedCount === 0) return;
+            if (this.state.selectedCount === 0) return;
 
             console.log('[Bulk Delete] Starting deletion...');
             const checkboxes = document.querySelectorAll(`.${CHECKBOX_CLASS}:checked`);
@@ -263,7 +274,8 @@
                 }
             }
 
-            this.syncState();
+            // Explicitly reset state to ensure UI updates immediately
+            this.state.selectedCount = 0;
             this.deleteBtn.textContent = 'Delete';
             this.deleteBtn.disabled = false;
             console.log('[Bulk Delete] Finished');
