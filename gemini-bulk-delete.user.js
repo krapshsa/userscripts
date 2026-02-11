@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini Bulk Delete
 // @namespace    http://tampermonkey.net/
-// @version      0.3
+// @version      0.4
 // @description  Bulk delete Gemini conversations
 // @author       Antigravity
 // @match        https://gemini.google.com/app*
@@ -35,7 +35,9 @@
     // =========================================================================
     // Styles
     // =========================================================================
-    const CHECKBOX_CLASS = 'gemini-bulk-del-checkbox';
+    const CHECKBOX_STYLE_CLASS = 'gemini-bulk-checkbox';
+    const CHECKBOX_ITEM_CLASS = 'gemini-bulk-item-checkbox';
+    const CHECKBOX_SELECT_ALL_CLASS = 'gemini-bulk-select-all';
 
     css`
         :root {
@@ -47,14 +49,13 @@
             --gemini-bulk-danger: #ea4335;
             --gemini-bulk-danger-hover: #f28b82;
         }
-        .${CHECKBOX_CLASS} {
+        .${CHECKBOX_STYLE_CLASS} {
             appearance: none;
             -webkit-appearance: none;
             width: 20px;
             height: 20px;
             border: 2px solid var(--gemini-bulk-border);
             border-radius: 6px;
-            margin-right: 12px;
             cursor: pointer;
             position: relative;
             transition: all 0.2s ease;
@@ -62,11 +63,11 @@
             flex-shrink: 0;
             z-index: 1000;
         }
-        .${CHECKBOX_CLASS}:checked {
+        .${CHECKBOX_STYLE_CLASS}:checked {
             background-color: var(--gemini-bulk-accent);
             border-color: var(--gemini-bulk-accent);
         }
-        .${CHECKBOX_CLASS}:checked::after {
+        .${CHECKBOX_STYLE_CLASS}:checked::after {
             content: '';
             position: absolute;
             left: 50%;
@@ -78,7 +79,7 @@
             transform: translate(-50%, -50%) rotate(45deg);
             margin-top: -2px;
         }
-        .${CHECKBOX_CLASS}:hover {
+        .${CHECKBOX_STYLE_CLASS}:hover {
             border-color: var(--gemini-bulk-accent-hover);
         }
         .gemini-bulk-selected {
@@ -136,6 +137,19 @@
         .gemini-floating-bar button:active {
             transform: scale(0.96);
         }
+        
+        /* Select All Container Alignment */
+        .gemini-bulk-title-container {
+            display: flex !important;
+            align-items: center !important;
+        }
+        
+        /* Select All Checkbox Specifics */
+        .gemini-bulk-select-all {
+            margin: 0 0 0 10px !important; /* Margin-left for separation */
+            width: 18px !important;
+            height: 18px !important;
+        }
     `;
 
     // =========================================================================
@@ -169,6 +183,7 @@
             this.createFloatingBar();
             this.initObserver();
             this.injectCheckboxes();
+            this.injectSelectAll();
         }
 
         createFloatingBar() {
@@ -218,7 +233,10 @@
                         break;
                     }
                 }
-                if (shouldUpdate) this.injectCheckboxes();
+                if (shouldUpdate) {
+                    this.injectCheckboxes();
+                    this.injectSelectAll();
+                }
             });
             observer.observe(document.body, { childList: true, subtree: true });
         }
@@ -230,7 +248,7 @@
 
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
-                checkbox.className = CHECKBOX_CLASS;
+                checkbox.className = `${CHECKBOX_STYLE_CLASS} ${CHECKBOX_ITEM_CLASS}`;
 
                 // Bind events
                 checkbox.addEventListener('click', (e) => e.stopPropagation());
@@ -243,6 +261,41 @@
             });
         }
 
+        injectSelectAll() {
+            const titleContainer = document.querySelector('.chat-history .title-container');
+            if (!titleContainer || titleContainer.querySelector(`.${CHECKBOX_SELECT_ALL_CLASS}`)) return;
+
+            // Add class for styling logic
+            titleContainer.classList.add('gemini-bulk-title-container');
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = `${CHECKBOX_STYLE_CLASS} ${CHECKBOX_SELECT_ALL_CLASS}`;
+            checkbox.title = 'Select All';
+
+            checkbox.addEventListener('click', (e) => e.stopPropagation());
+            checkbox.addEventListener('change', (e) => {
+                const checked = e.target.checked;
+                const checkboxes = document.querySelectorAll(`.${CHECKBOX_ITEM_CLASS}`);
+                let count = 0;
+
+                checkboxes.forEach(cb => {
+                    cb.checked = checked;
+                    const link = cb.closest('a');
+                    if (checked) {
+                        link.classList.add('gemini-bulk-selected');
+                        count++;
+                    } else {
+                        link.classList.remove('gemini-bulk-selected');
+                    }
+                });
+                this.state.selectedCount = count;
+            });
+
+            // Append to end (Right side)
+            titleContainer.appendChild(checkbox);
+        }
+
         handleCheckboxChange(e) {
             const link = e.target.closest('a');
             if (e.target.checked) {
@@ -252,13 +305,21 @@
                 link.classList.remove('gemini-bulk-selected');
                 this.state.selectedCount--;
             }
+
+            // Uncheck 'Select All' if a single item is unchecked
+            if (!e.target.checked) {
+                const selectAllCtx = document.querySelector(`.${CHECKBOX_SELECT_ALL_CLASS}`);
+                if (selectAllCtx && selectAllCtx.checked) {
+                    selectAllCtx.checked = false;
+                }
+            }
         }
 
         async deleteSelectedItems() {
             if (this.state.selectedCount === 0) return;
 
             console.log('[Bulk Delete] Starting deletion...');
-            const checkboxes = document.querySelectorAll(`.${CHECKBOX_CLASS}:checked`);
+            const checkboxes = document.querySelectorAll(`.${CHECKBOX_ITEM_CLASS}:checked`);
 
             // Optional: Visually indicate processing could be added here
             this.deleteBtn.textContent = 'Deleting...';
@@ -278,6 +339,11 @@
             this.state.selectedCount = 0;
             this.deleteBtn.textContent = 'Delete';
             this.deleteBtn.disabled = false;
+
+            // Reset Select All checkbox
+            const selectAllCtx = document.querySelector(`.${CHECKBOX_SELECT_ALL_CLASS}`);
+            if (selectAllCtx) selectAllCtx.checked = false;
+
             console.log('[Bulk Delete] Finished');
         }
 
