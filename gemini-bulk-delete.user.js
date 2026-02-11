@@ -38,6 +38,7 @@
     const CHECKBOX_STYLE_CLASS = 'gemini-bulk-checkbox';
     const CHECKBOX_ITEM_CLASS = 'gemini-bulk-item-checkbox';
     const CHECKBOX_SELECT_ALL_CLASS = 'gemini-bulk-select-all';
+    const TOOLBAR_CLASS = 'gemini-bulk-toolbar';
 
     css`
         :root {
@@ -85,57 +86,48 @@
         .gemini-bulk-selected {
             background-color: var(--gemini-bulk-border);
         }
-        /* Floating Bar */
-        .gemini-floating-bar {
-            position: absolute !important;
-            bottom: 20px; /* Start slightly lower (safe zone) */
-            left: 50%;
-            transform: translateX(-50%); /* Center horizontally only - No vertical transform! */
-            background: var(--gemini-bulk-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            color: var(--gemini-bulk-text);
-            padding: 12px 24px;
-            border-radius: 16px;
+
+        /* Inline Toolbar */
+        .${TOOLBAR_CLASS} {
             display: flex;
             align-items: center;
-            gap: 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            border: 1px solid var(--gemini-bulk-border);
-            z-index: 9999;
-            font-family: 'Google Sans', Roboto, sans-serif;
-            font-size: 14px;
-            font-weight: 500;
-            transition: bottom 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s ease; /* Animate BOTTOM property */
+            gap: 12px;
+            margin-left: 16px;
+            padding-left: 16px;
             opacity: 0;
-            pointer-events: none;
-            width: max-content;
-            margin: 0 !important;
+            transition: opacity 0.3s ease, visibility 0.3s;
+            visibility: hidden;
         }
-        .gemini-floating-bar.visible {
-            bottom: 30px; /* Slide UP to final position */
+        .${TOOLBAR_CLASS}.visible {
             opacity: 1;
-            pointer-events: auto;
+            visibility: visible;
         }
-        .gemini-floating-bar button {
-            background: var(--gemini-bulk-danger);
-            color: #fff;
+        .${TOOLBAR_CLASS} span {
+            color: var(--gemini-bulk-text);
+        }
+        .${TOOLBAR_CLASS} button {
+            background: transparent;
             border: none;
-            padding: 10px 20px;
-            border-radius: 20px;
             cursor: pointer;
-            font-weight: 600;
-            font-size: 14px;
-            letter-spacing: 0.5px;
-            transition: background-color 0.2s, transform 0.1s;
-            box-shadow: 0 2px 8px rgba(234, 67, 53, 0.3);
+            padding: 8px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--gemini-bulk-danger);
+            transition: background 0.2s ease;
         }
-        .gemini-floating-bar button:hover {
-            background: var(--gemini-bulk-danger-hover);
-            box-shadow: 0 4px 12px rgba(234, 67, 53, 0.4);
+        .${TOOLBAR_CLASS} button:hover {
+            background: rgba(234, 67, 53, 0.1);
         }
-        .gemini-floating-bar button:active {
-            transform: scale(0.96);
+        .${TOOLBAR_CLASS} button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .${TOOLBAR_CLASS} svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
         }
         
         /* Select All Container Alignment */
@@ -160,10 +152,10 @@
             this.state = this.createStore({
                 selectedCount: 0
             }, (state) => {
-                this.updateFloatingBar(state);
+                this.updateToolbar(state);
             });
 
-            this.floatingBarEl = null;
+            this.toolbarEl = null;
             this.countEl = null;
             this.deleteBtn = null;
         }
@@ -180,47 +172,21 @@
 
         init() {
             console.log('[Bulk Delete] Initializing...');
-            this.createFloatingBar();
             this.initObserver();
             this.injectCheckboxes();
             this.injectSelectAll();
         }
 
-        createFloatingBar() {
-            const wrapper = document.createElement('div');
-            wrapper.innerHTML = html`
-                <div id="gemini-bulk-del-bar" class="gemini-floating-bar">
-                    <span>0 selected</span>
-                    <button id="gemini-bulk-del-btn">Delete</button>
-                </div>
-            `;
-            this.floatingBarEl = wrapper.firstElementChild;
-            this.countEl = this.floatingBarEl.querySelector('span');
-            this.deleteBtn = this.floatingBarEl.querySelector('button');
+        updateToolbar(state) {
+            if (!this.toolbarEl) return;
 
-            this.deleteBtn.addEventListener('click', () => this.deleteSelectedItems());
-
-            const appendToSidebar = async () => {
-                try {
-                    const sidebar = await this.waitForSelector('bard-sidenav', 10000);
-                    sidebar.appendChild(this.floatingBarEl);
-                    console.log('[Bulk Delete] Floating bar attached to sidebar');
-                } catch (e) {
-                    console.warn('[Bulk Delete] Sidebar not found, attaching to body as fallback');
-                    document.body.appendChild(this.floatingBarEl);
-                    this.floatingBarEl.style.position = 'fixed';
-                    this.floatingBarEl.style.bottom = '30px';
-                }
-            };
-            appendToSidebar();
-        }
-
-        updateFloatingBar(state) {
             if (state.selectedCount > 0) {
-                this.floatingBarEl.classList.add('visible');
+                this.toolbarEl.classList.add('visible');
                 this.countEl.textContent = `${state.selectedCount} selected`;
+                this.deleteBtn.disabled = false;
             } else {
-                this.floatingBarEl.classList.remove('visible');
+                this.toolbarEl.classList.remove('visible');
+                this.deleteBtn.disabled = true;
             }
         }
 
@@ -292,8 +258,31 @@
                 this.state.selectedCount = count;
             });
 
-            // Append to end (Right side)
+            // Append Select All Checkbox
             titleContainer.appendChild(checkbox);
+
+            // Create Toolbar
+            const toolbar = document.createElement('div');
+            toolbar.classList.add(TOOLBAR_CLASS, 'gds-label-l');
+            toolbar.innerHTML = html`
+                <span>0 selected</span>
+                <button title="Delete Selected">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                    </svg>
+                </button>
+            `;
+
+            this.toolbarEl = toolbar;
+            this.countEl = toolbar.querySelector('span');
+            this.deleteBtn = toolbar.querySelector('button');
+
+            this.deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.deleteSelectedItems();
+            });
+
+            titleContainer.appendChild(toolbar);
         }
 
         handleCheckboxChange(e) {
@@ -322,7 +311,6 @@
             const checkboxes = document.querySelectorAll(`.${CHECKBOX_ITEM_CLASS}:checked`);
 
             // Optional: Visually indicate processing could be added here
-            this.deleteBtn.textContent = 'Deleting...';
             this.deleteBtn.disabled = true;
 
             for (const checkbox of checkboxes) {
@@ -337,7 +325,6 @@
 
             // Explicitly reset state to ensure UI updates immediately
             this.state.selectedCount = 0;
-            this.deleteBtn.textContent = 'Delete';
             this.deleteBtn.disabled = false;
 
             // Reset Select All checkbox
