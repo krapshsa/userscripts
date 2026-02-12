@@ -178,7 +178,9 @@
         }
 
         updateToolbar(state) {
-            if (!this.toolbarEl) return;
+            if (!this.toolbarEl) {
+                return;
+            }
 
             if (state.selectedCount > 0) {
                 this.toolbarEl.classList.add('visible');
@@ -210,7 +212,9 @@
         injectCheckboxes() {
             const links = document.querySelectorAll('a[href^="/app/"][data-test-id="conversation"]');
             links.forEach(link => {
-                if (link.dataset.bulkDeleteProcessed) return;
+                if (link.dataset.bulkDeleteProcessed) {
+                    return;
+                }
 
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
@@ -229,7 +233,9 @@
 
         injectSelectAll() {
             const titleContainer = document.querySelector('.chat-history .title-container');
-            if (!titleContainer || titleContainer.querySelector(`.${CHECKBOX_SELECT_ALL_CLASS}`)) return;
+            if (!titleContainer || titleContainer.querySelector(`.${CHECKBOX_SELECT_ALL_CLASS}`)) {
+                return;
+            }
 
             // Add class for styling logic
             titleContainer.classList.add('gemini-bulk-title-container');
@@ -305,7 +311,9 @@
         }
 
         async deleteSelectedItems() {
-            if (this.state.selectedCount === 0) return;
+            if (this.state.selectedCount === 0) {
+                return;
+            }
 
             console.log('[Bulk Delete] Starting deletion...');
             const checkboxes = document.querySelectorAll(`.${CHECKBOX_ITEM_CLASS}:checked`);
@@ -329,13 +337,17 @@
 
             // Reset Select All checkbox
             const selectAllCtx = document.querySelector(`.${CHECKBOX_SELECT_ALL_CLASS}`);
-            if (selectAllCtx) selectAllCtx.checked = false;
+            if (selectAllCtx) {
+                selectAllCtx.checked = false;
+            }
 
             console.log('[Bulk Delete] Finished');
         }
 
         isVisible(el) {
-            if (!el) return false;
+            if (!el) {
+                return false;
+            }
             if (el.checkVisibility) {
                 return el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
             }
@@ -352,7 +364,9 @@
             };
 
             const existing = check();
-            if (existing) return existing;
+            if (existing) {
+                return existing;
+            }
 
             return new Promise((resolve, reject) => {
                 const observer = new MutationObserver(() => {
@@ -376,7 +390,9 @@
 
         async waitForDisappearance(selector, timeout = 5000) {
             const check = () => !this.isVisible(document.querySelector(selector));
-            if (check()) return;
+            if (check()) {
+                return;
+            }
 
             return new Promise((resolve, reject) => {
                 const observer = new MutationObserver(() => {
