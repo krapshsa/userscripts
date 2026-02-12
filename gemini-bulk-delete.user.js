@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini Bulk Delete
 // @namespace    http://tampermonkey.net/
-// @version      0.4
+// @version      0.5
 // @description  Bulk delete Gemini conversations
 // @author       Antigravity
 // @match        https://gemini.google.com/app*
@@ -318,24 +318,22 @@
             console.log('[Bulk Delete] Starting deletion...');
             const checkboxes = document.querySelectorAll(`.${CHECKBOX_ITEM_CLASS}:checked`);
 
-            // Optional: Visually indicate processing could be added here
+            // Disable delete button during processing
             this.deleteBtn.disabled = true;
 
+            // Process each selected item
             for (const checkbox of checkboxes) {
-                const menuButton = checkbox
-                    .closest('div')
-                    .querySelector('button[data-test-id="actions-menu-button"]');
-
-                if (menuButton) {
-                    await this.deleteItem(menuButton);
+                const row = checkbox.closest('a');
+                if (row) {
+                    await this.deleteConversation(row);
                 }
             }
 
-            // Explicitly reset state to ensure UI updates immediately
+            // Sync state after all operations
             this.state.selectedCount = 0;
             this.deleteBtn.disabled = false;
 
-            // Reset Select All checkbox
+            // Uncheck Select All if present
             const selectAllCtx = document.querySelector(`.${CHECKBOX_SELECT_ALL_CLASS}`);
             if (selectAllCtx) {
                 selectAllCtx.checked = false;
@@ -357,83 +355,138 @@
                 style.visibility !== 'hidden';
         }
 
-        async waitForSelector(selector, timeout = 5000) {
+        async waitFor(predicate, timeout = 5000, context = 'condition') {
             const check = () => {
-                const el = document.querySelector(selector);
-                return (el && this.isVisible(el)) ? el : null;
+                try {
+                    const result = predicate();
+                    return result;
+                } catch (e) {
+                    return false;
+                }
             };
 
-            const existing = check();
-            if (existing) {
-                return existing;
+            const initial = check();
+            if (initial) {
+                return initial;
             }
 
             return new Promise((resolve, reject) => {
                 const observer = new MutationObserver(() => {
-                    const el = check();
-                    if (el) {
+                    const result = check();
+                    if (result) {
                         observer.disconnect();
-                        resolve(el);
+                        resolve(result);
                     }
                 });
+
                 observer.observe(document.body, {
                     childList: true,
                     subtree: true,
-                    attributes: true // Watch for class/style changes
+                    attributes: true,
+                    characterData: true
                 });
+
                 setTimeout(() => {
                     observer.disconnect();
-                    reject(new Error(`Timeout waiting for visible selector: ${selector}`));
+                    reject(new Error(`Timeout waiting for: ${context}`));
                 }, timeout);
             });
         }
 
-        async waitForDisappearance(selector, timeout = 5000) {
-            const check = () => !this.isVisible(document.querySelector(selector));
-            if (check()) {
-                return;
-            }
-
-            return new Promise((resolve, reject) => {
-                const observer = new MutationObserver(() => {
-                    if (check()) {
-                        observer.disconnect();
-                        resolve();
-                    }
-                });
-                observer.observe(document.body, {
-                    childList: true,
-                    subtree: true,
-                    attributes: true
-                });
-                setTimeout(() => {
-                    observer.disconnect();
-                    reject(new Error(`Timeout waiting for disappearance: ${selector}`));
-                }, timeout);
-            });
-        }
-
-        async deleteItem(menuButton) {
+        async deleteConversation(row) {
             try {
-                if (!this.isVisible(menuButton)) {
-                    menuButton.scrollIntoView({ block: 'center' });
+                const menuButtonSelector = 'button[data-test-id="actions-menu-button"]';
+
+                // Try finding button in row (<a>) or parent container
+                let menuButton = row.querySelector(menuButtonSelector);
+
+                // If not found in <a>, check parent. 
+                // SAFETY: Ensure parent only contains THIS row to avoid selecting a sibling's button.
+                if (!menuButton && row.parentElement) {
+                    const parentData = row.parentElement.querySelectorAll('a[data-test-id="conversation"]');
+                    if (parentData.length === 1) {
+                        menuButton = row.parentElement.querySelector(menuButtonSelector);
+                    }
                 }
+
+                if (!menuButton) {
+                    throw new Error('Menu button not found in row or immediate parent');
+                }
+
+                // Scroll just in case
+                menuButton.scrollIntoView({ block: 'nearest' });
+
+                // Try to force visibility via events
+                [row, row.parentElement].forEach(el => {
+                    if (el) {
+                        el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+                        el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+                        el.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+                    }
+                });
+
+                // Force CSS visibility
+                menuButton.style.visibility = 'visible';
+                menuButton.style.opacity = '1';
+                menuButton.style.display = 'block';
+
+                // Click menu to open
+                try {
+                    await this.waitFor(
+                        () => this.isVisible(menuButton),
+                        1000,
+                        'Menu button visibility'
+                    );
+                } catch (e) {
+                    // Ignore visibility timeout if we can click it anyway
+                    console.warn('Button not visible, trying to click anyway');
+                }
+
                 menuButton.click();
 
-                const deleteSelector = '[role="menuitem"][data-test-id="delete-button"]';
-                const deleteOption = await this.waitForSelector(deleteSelector);
+                // 2. Wait for the menu to appear (global, usually appended to body or near end)
+                // We identify it by role="menu". To be safe, look for the 'Delete' option immediately.
+                const deleteOptionSelector = '[role="menuitem"][data-test-id="delete-button"]';
+                const deleteOption = await this.waitFor(
+                    () => {
+                        const el = document.querySelector(deleteOptionSelector);
+                        return (el && this.isVisible(el)) ? el : null;
+                    },
+                    2000,
+                    'Delete menu option'
+                );
+
+                // 3. Click Delete
                 deleteOption.click();
 
-                const confirmSelector = 'button[data-test-id="confirm-button"]';
-                const confirmButton = await this.waitForSelector(confirmSelector);
+                // 4. Wait for confirmation dialog
+                const confirmButtonSelector = 'button[data-test-id="confirm-button"]';
+                const confirmButton = await this.waitFor(
+                    () => {
+                        const el = document.querySelector(confirmButtonSelector);
+                        return (el && this.isVisible(el)) ? el : null;
+                    },
+                    2000,
+                    'Confirm deletion button'
+                );
+
+                // 5. Click Confirm
                 confirmButton.click();
 
-                await this.waitForDisappearance(confirmSelector);
+                // 6. KEY VERIFICATION: Wait for the row to be removed from DOM
+                // This guarantees the action is effectively complete before moving on.
+                await this.waitFor(
+                    () => !row.isConnected,
+                    10000,
+                    'Row detachment'
+                );
 
-                // Small grace period for DOM stabilization
-                await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                // Small breath to let UI settle if needed, though detachment is a strong signal
+                // await new Promise(r => setTimeout(r, 100));
             } catch (err) {
-                console.error('Delete failed for item', err);
+                console.error('Delete failed for conversation:', err);
+                // Optionally visually flag the failure
+                row.style.outline = '2px solid red';
             }
         }
     }
