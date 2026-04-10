@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini Bulk Delete
 // @namespace    http://tampermonkey.net/
-// @version      0.5
+// @version      0.6
 // @description  Bulk delete Gemini conversations
 // @author       Antigravity
 // @match        https://gemini.google.com/app*
@@ -43,13 +43,28 @@
     css`
         :root {
             --gemini-bulk-bg: rgba(30, 30, 30, 0.9);
-            --gemini-bulk-border: rgba(255, 255, 255, 0.1);
+            --gemini-bulk-border: rgba(255, 255, 255, 0.3);
             --gemini-bulk-text: #e3e3e3;
             --gemini-bulk-accent: #8ab4f8;
             --gemini-bulk-accent-hover: #aecbfa;
             --gemini-bulk-danger: #ea4335;
             --gemini-bulk-danger-hover: #f28b82;
+            --gemini-bulk-selected-bg: rgba(255, 255, 255, 0.1);
+            --gemini-bulk-checkmark: #1e1e1e;
         }
+        
+        body.light-theme {
+            --gemini-bulk-bg: rgba(255, 255, 255, 0.9);
+            --gemini-bulk-border: rgba(0, 0, 0, 0.4);
+            --gemini-bulk-text: #1f1f1f;
+            --gemini-bulk-accent: #0b57d0;
+            --gemini-bulk-accent-hover: #0842a0;
+            --gemini-bulk-danger: #d93025;
+            --gemini-bulk-danger-hover: #b3261e;
+            --gemini-bulk-selected-bg: rgba(0, 0, 0, 0.08);
+            --gemini-bulk-checkmark: #ffffff;
+        }
+
         .${CHECKBOX_STYLE_CLASS} {
             appearance: none;
             -webkit-appearance: none;
@@ -75,7 +90,7 @@
             top: 50%;
             width: 5px;
             height: 10px;
-            border: solid #1e1e1e;
+            border: solid var(--gemini-bulk-checkmark);
             border-width: 0 2px 2px 0;
             transform: translate(-50%, -50%) rotate(45deg);
             margin-top: -2px;
@@ -84,7 +99,7 @@
             border-color: var(--gemini-bulk-accent-hover);
         }
         .gemini-bulk-selected {
-            background-color: var(--gemini-bulk-border);
+            background-color: var(--gemini-bulk-selected-bg);
         }
 
         /* Inline Toolbar */
