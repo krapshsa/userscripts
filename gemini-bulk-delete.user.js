@@ -225,7 +225,7 @@
         }
 
         injectCheckboxes() {
-            const links = document.querySelectorAll('a[href^="/app/"][data-test-id="conversation"]');
+            const links = document.querySelectorAll('a[href^="/app/"]');
             links.forEach(link => {
                 if (link.dataset.bulkDeleteProcessed) {
                     return;
@@ -247,7 +247,7 @@
         }
 
         injectSelectAll() {
-            const titleContainer = document.querySelector('.chat-history .title-container');
+            const titleContainer = document.querySelector('button[aria-controls="sidenav-section-content-chats"]');
             if (!titleContainer || titleContainer.querySelector(`.${CHECKBOX_SELECT_ALL_CLASS}`)) {
                 return;
             }
@@ -410,20 +410,10 @@
 
         async deleteConversation(row) {
             try {
-                const menuButtonSelector = 'button[data-test-id="actions-menu-button"]';
+                const menuButtonSelector = 'gem-icon-button[data-test-id="actions-menu-button"]';
 
                 // Try finding button in row (<a>) or parent container
-                let menuButton = row.querySelector(menuButtonSelector);
-
-                // If not found in <a>, check parent. 
-                // SAFETY: Ensure parent only contains THIS row to avoid selecting a sibling's button.
-                if (!menuButton && row.parentElement) {
-                    const parentData = row.parentElement.querySelectorAll('a[data-test-id="conversation"]');
-                    if (parentData.length === 1) {
-                        menuButton = row.parentElement.querySelector(menuButtonSelector);
-                    }
-                }
-
+                let menuButton = row.parentElement.querySelector(menuButtonSelector);
                 if (!menuButton) {
                     throw new Error('Menu button not found in row or immediate parent');
                 }
@@ -461,7 +451,7 @@
 
                 // 2. Wait for the menu to appear (global, usually appended to body or near end)
                 // We identify it by role="menu". To be safe, look for the 'Delete' option immediately.
-                const deleteOptionSelector = '[role="menuitem"][data-test-id="delete-button"]';
+                const deleteOptionSelector = 'button[role="menuitem"][data-test-id="delete-button"]';
                 const deleteOption = await this.waitFor(
                     () => {
                         const el = document.querySelector(deleteOptionSelector);
@@ -475,7 +465,7 @@
                 deleteOption.click();
 
                 // 4. Wait for confirmation dialog
-                const confirmButtonSelector = 'button[data-test-id="confirm-button"]';
+                const confirmButtonSelector = 'gem-button[data-test-id="confirm-button"]';
                 const confirmButton = await this.waitFor(
                     () => {
                         const el = document.querySelector(confirmButtonSelector);
