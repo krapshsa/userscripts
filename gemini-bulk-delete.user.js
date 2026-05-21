@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini Bulk Delete
 // @namespace    http://tampermonkey.net/
-// @version      0.6
+// @version      0.7
 // @description  Bulk delete Gemini conversations
 // @author       Antigravity
 // @match        https://gemini.google.com/app*
