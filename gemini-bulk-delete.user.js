@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini Bulk Delete
 // @namespace    http://tampermonkey.net/
-// @version      0.7
+// @version      0.8
 // @description  Bulk delete Gemini conversations
 // @author       Antigravity
 // @match        https://gemini.google.com/app*
@@ -410,7 +410,7 @@
 
         async deleteConversation(row) {
             try {
-                const menuButtonSelector = 'gem-icon-button[data-test-id="actions-menu-button"]';
+                const menuButtonSelector = 'button[data-test-id="actions-menu-button"]';
 
                 // Try finding button in row (<a>) or parent container
                 let menuButton = row.parentElement.querySelector(menuButtonSelector);
