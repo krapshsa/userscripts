@@ -5,6 +5,7 @@
 // @description  Bulk delete Gemini conversations
 // @author       Antigravity
 // @match        https://gemini.google.com/app*
+// @match        https://gemini.google.com/u/*/app/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=gemini.google.com
 // @noframes
 // @grant        none
